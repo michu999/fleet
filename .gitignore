@@ -3827,8 +3827,7 @@ inc/
 
 # Ignore all JENKINS_HOME except jobs directory, root xml config, and
 # .gitignore file.
-/*
-!/jobs
+/*!/jobs
 !/*.xml
 
 # Ignore all files in jobs subdirectories except for folders.
