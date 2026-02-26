@@ -3,8 +3,7 @@
 # website: https://www.uipath.com/product/studio
 #
 # Recommended: n/a
-!frontend/
-!backend!
+
 
 # Ignore folders that could cause issues if accidentally tracked
 **/.local/**
@@ -1682,7 +1681,7 @@ FodyWeavers.xsd
 # Recommended: Go.AllowList.gitignore
 
 # Ignore everything
-*
+
 
 # But not these files...
 !/.gitignore
@@ -1697,7 +1696,7 @@ FodyWeavers.xsd
 # !Makefile
 
 # ...even if they are in subdirectories
-!*/
+
 
 ### IAR template
 # Compiled binaries
