@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import EmailStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+from pydantic import field_validator
 
 class Settings(BaseSettings):
     """
@@ -49,6 +49,15 @@ class Settings(BaseSettings):
 
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
+
+    # Secret key Validation
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v: str, info) -> str:
+        if info.data.get("ENVIRONMENT") == "production":
+            if not v or v == "change-me-in-production" or len(v) < 32:
+                raise ValueError("SECRET_KEY must be at least 32 characters in production")
+        return v
 
 
 @lru_cache

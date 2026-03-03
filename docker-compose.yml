@@ -17,6 +17,12 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - fleet-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   frontend:
     build:
@@ -39,9 +45,9 @@ services:
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: fleet
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-fleet}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
