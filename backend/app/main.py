@@ -14,6 +14,13 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import settings
 from app.core.logging import setup_logging
 
+# Import routers
+from app.modules.auth.router import router as auth_router
+from app.modules.fleet.router import router as fleet_router
+from app.modules.orders.router import router as orders_router
+from app.modules.notifications.router import router as notifications_router
+from app.modules.reports.router import router as reports_router
+
 # Rate limiter setup
 limiter = Limiter(key_func=get_remote_address)
 
@@ -49,7 +56,7 @@ app.add_middleware(
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Tenant-Id"],
 )
 
 
@@ -63,16 +70,9 @@ async def health_check(request: Request):
     return {"status": "ok", "environment": settings.ENVIRONMENT}
 
 
-# Router includes placeholder
-# Uncomment as modules are implemented:
-# from app.modules.auth.router import router as auth_router
-# from app.modules.fleet.router import router as fleet_router
-# from app.modules.orders.router import router as orders_router
-# from app.modules.reports.router import router as reports_router
-# from app.modules.notifications.router import router as notifications_router
-#
-# app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
-# app.include_router(fleet_router, prefix="/api/v1/fleet", tags=["Fleet"])
-# app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])
-# app.include_router(reports_router, prefix="/api/v1/reports", tags=["Reports"])
-# app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["Notifications"])
+# Include routers
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(fleet_router, prefix="/api/v1/fleet", tags=["Fleet"])
+app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])
+app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["Notifications"])
+app.include_router(reports_router, prefix="/api/v1/reports", tags=["Reports"])

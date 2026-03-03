@@ -11,7 +11,6 @@ from sqlalchemy.pool import NullPool
 import asyncpg
 
 from app.main import app
-from app.core.config import settings
 from app.core.database import Base, get_db
 
 TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5433/fleet_test"
@@ -30,7 +29,6 @@ def event_loop() -> Generator:
 
 @pytest.fixture(scope="session", autouse=True)
 async def create_test_database():
-    """Tworzy bazę testową przed testami."""
     conn = await asyncpg.connect(
         user="postgres",
         password="postgres",
@@ -39,7 +37,6 @@ async def create_test_database():
         database="postgres"
     )
     try:
-        # Zamknij połączenia do bazy testowej
         await conn.execute("""
                            SELECT pg_terminate_backend(pg_stat_activity.pid)
                            FROM pg_stat_activity

@@ -6,7 +6,7 @@ Uses pydantic-settings for type-safe configuration management.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import EmailStr
+# EmailStr will be used when email validation is needed
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 
@@ -23,9 +23,8 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "fleet"
 
-    @property
-    def DATABASE_URL(self) -> str:
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+    # Database URL - can be set directly or will be constructed from parts
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/fleet"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -37,9 +36,6 @@ class Settings(BaseSettings):
     # Application
     ENVIRONMENT: Literal["development", "staging", "production"] = "development"
     DEBUG: bool = True
-
-    # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/fleet"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
