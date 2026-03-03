@@ -17,6 +17,7 @@ class UserRole(str, Enum):
     User roles in the system.
     Inherits from str for JSON serialization compatibility.
     """
+    SUPER_ADMIN = "super_admin"   # Can manage multiple tenants (this is for SaaS admin users, not tenant users)
     ADMIN = "admin"           # Full access to tenant
     MANAGER = "manager"       # Can manage fleet, orders, reports
     DISPATCHER = "dispatcher" # Can assign orders, manage trips
@@ -103,6 +104,7 @@ class WorkType(str, Enum):
     """
     DRIVING = "driving"   # Behind the wheel
     REST = "rest"         # Mandatory rest period
+    AVAILABILITY = "availability" # Available but not driving (e.g. waiting for assignment)
     LOADING = "loading"   # Loading/unloading cargo
     WAITING = "waiting"   # Waiting at location
     BREAK = "break"         # Short break (not rest)

@@ -37,7 +37,7 @@ class Tenant(Base):
         # Check that name is not just whitespace
         CheckConstraint("length(trim(name)) > 0", name="ck_tenants_name_not_empty"),
     )
-
+    slug: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
