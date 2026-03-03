@@ -7,10 +7,6 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/fleet
-      - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=development
     env_file:
       - ./backend/.env
     depends_on:
@@ -41,7 +37,7 @@ services:
   postgres:
     image: postgres:15
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -76,10 +72,6 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./backend:/app
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/fleet
-      - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=development
     env_file:
       - ./backend/.env
     depends_on:
@@ -87,7 +79,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A app.core.celery_app worker --loglevel=info --uid=nobody --gid=nogroup
+    command: celery -A app.core.celery_app worker --loglevel=info
     networks:
       - fleet-network
 

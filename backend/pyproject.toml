@@ -3,7 +3,7 @@ name = "backend"
 version = "0.1.0"
 description = "fleet management system"
 authors = ["michu"]
-packages = [{ include = "backend" }]
+packages = [{ include = "app", from = "." }]
 
 [tool.poetry.dependencies]
 python = "^3.12"
