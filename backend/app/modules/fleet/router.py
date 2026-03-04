@@ -2,17 +2,19 @@
 Fleet module router.
 API endpoints for vehicle, trailer, trip, and work time management.
 
-Note: Authentication will be added when auth module is implemented.
-For now, tenant_id is passed as a header for testing purposes.
+All endpoints require authentication via JWT cookie.
+Tenant isolation is enforced by extracting tenant_id from authenticated user.
 """
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.dependencies import get_current_user, require_dispatcher, require_driver
 from app.core.enums import VehicleStatus, TrailerStatus, TripStatus
+from app.modules.auth.models import User
 from app.modules.fleet.service import VehicleService, TrailerService, TripService
 from app.modules.fleet.schemas import (
     VehicleCreate,
@@ -31,31 +33,19 @@ router = APIRouter()
 
 
 # =============================================================================
-# Temporary tenant dependency (will be replaced with auth)
-# =============================================================================
-
-async def get_tenant_id(x_tenant_id: UUID = Header(...)) -> UUID:
-    """
-    Temporary dependency to get tenant_id from header.
-    Will be replaced with proper auth when implemented.
-    """
-    return x_tenant_id
-
-
-# =============================================================================
 # Vehicle Endpoints
 # =============================================================================
 
 @router.get("/vehicles", response_model=VehicleList)
 async def list_vehicles(
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     status: VehicleStatus | None = None,
 ):
     """List all vehicles with pagination and optional filtering."""
-    service = VehicleService(db, tenant_id)
+    service = VehicleService(db, current_user.tenant_id)
     skip = (page - 1) * per_page
     vehicles, total = await service.list_all(skip=skip, limit=per_page, status=status)
     return VehicleList(
@@ -69,11 +59,11 @@ async def list_vehicles(
 @router.get("/vehicles/{vehicle_id}", response_model=VehicleRead)
 async def get_vehicle(
     vehicle_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_driver),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific vehicle by ID."""
-    service = VehicleService(db, tenant_id)
+    service = VehicleService(db, current_user.tenant_id)
     vehicle = await service.get_by_id(vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -83,11 +73,11 @@ async def get_vehicle(
 @router.post("/vehicles", response_model=VehicleRead, status_code=status.HTTP_201_CREATED)
 async def create_vehicle(
     data: VehicleCreate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new vehicle."""
-    service = VehicleService(db, tenant_id)
+    service = VehicleService(db, current_user.tenant_id)
     
     # Check if plate number already exists
     existing = await service.get_by_plate_number(data.plate_number)
@@ -105,11 +95,11 @@ async def create_vehicle(
 async def update_vehicle(
     vehicle_id: UUID,
     data: VehicleUpdate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing vehicle."""
-    service = VehicleService(db, tenant_id)
+    service = VehicleService(db, current_user.tenant_id)
     vehicle = await service.get_by_id(vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -130,11 +120,11 @@ async def update_vehicle(
 @router.delete("/vehicles/{vehicle_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_vehicle(
     vehicle_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Soft delete a vehicle (set status to inactive)."""
-    service = VehicleService(db, tenant_id)
+    service = VehicleService(db, current_user.tenant_id)
     vehicle = await service.get_by_id(vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -147,14 +137,14 @@ async def delete_vehicle(
 
 @router.get("/trailers", response_model=list[TrailerRead])
 async def list_trailers(
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     status: TrailerStatus | None = None,
 ):
     """List all trailers with pagination."""
-    service = TrailerService(db, tenant_id)
+    service = TrailerService(db, current_user.tenant_id)
     skip = (page - 1) * per_page
     trailers, _ = await service.list_all(skip=skip, limit=per_page, status=status)
     return [TrailerRead.model_validate(t) for t in trailers]
@@ -163,11 +153,11 @@ async def list_trailers(
 @router.get("/trailers/{trailer_id}", response_model=TrailerRead)
 async def get_trailer(
     trailer_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_driver),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific trailer by ID."""
-    service = TrailerService(db, tenant_id)
+    service = TrailerService(db, current_user.tenant_id)
     trailer = await service.get_by_id(trailer_id)
     if not trailer:
         raise HTTPException(status_code=404, detail="Trailer not found")
@@ -177,11 +167,11 @@ async def get_trailer(
 @router.post("/trailers", response_model=TrailerRead, status_code=status.HTTP_201_CREATED)
 async def create_trailer(
     data: TrailerCreate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new trailer."""
-    service = TrailerService(db, tenant_id)
+    service = TrailerService(db, current_user.tenant_id)
     trailer = await service.create(data)
     return trailer
 
@@ -190,11 +180,11 @@ async def create_trailer(
 async def update_trailer(
     trailer_id: UUID,
     data: TrailerUpdate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing trailer."""
-    service = TrailerService(db, tenant_id)
+    service = TrailerService(db, current_user.tenant_id)
     trailer = await service.get_by_id(trailer_id)
     if not trailer:
         raise HTTPException(status_code=404, detail="Trailer not found")
@@ -208,7 +198,7 @@ async def update_trailer(
 
 @router.get("/trips", response_model=list[TripRead])
 async def list_trips(
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_driver),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -216,7 +206,7 @@ async def list_trips(
     driver_id: UUID | None = None,
 ):
     """List all trips with pagination and filtering."""
-    service = TripService(db, tenant_id)
+    service = TripService(db, current_user.tenant_id)
     skip = (page - 1) * per_page
     trips, _ = await service.list_all(
         skip=skip, limit=per_page, status=status, driver_id=driver_id
@@ -227,11 +217,11 @@ async def list_trips(
 @router.get("/trips/{trip_id}", response_model=TripRead)
 async def get_trip(
     trip_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_driver),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific trip by ID."""
-    service = TripService(db, tenant_id)
+    service = TripService(db, current_user.tenant_id)
     trip = await service.get_by_id(trip_id)
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
@@ -241,11 +231,11 @@ async def get_trip(
 @router.post("/trips", response_model=TripRead, status_code=status.HTTP_201_CREATED)
 async def create_trip(
     data: TripCreate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new trip."""
-    service = TripService(db, tenant_id)
+    service = TripService(db, current_user.tenant_id)
     trip = await service.create(data)
     return trip
 
@@ -254,11 +244,11 @@ async def create_trip(
 async def update_trip(
     trip_id: UUID,
     data: TripUpdate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing trip."""
-    service = TripService(db, tenant_id)
+    service = TripService(db, current_user.tenant_id)
     trip = await service.get_by_id(trip_id)
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
@@ -269,11 +259,11 @@ async def update_trip(
 @router.post("/trips/{trip_id}/start", response_model=TripRead)
 async def start_trip(
     trip_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_driver),
     db: AsyncSession = Depends(get_db),
 ):
     """Start a trip (set actual departure time)."""
-    service = TripService(db, tenant_id)
+    service = TripService(db, current_user.tenant_id)
     trip = await service.get_by_id(trip_id)
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
@@ -286,11 +276,11 @@ async def start_trip(
 @router.post("/trips/{trip_id}/complete", response_model=TripRead)
 async def complete_trip(
     trip_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_driver),
     db: AsyncSession = Depends(get_db),
 ):
     """Complete a trip (set actual arrival time)."""
-    service = TripService(db, tenant_id)
+    service = TripService(db, current_user.tenant_id)
     trip = await service.get_by_id(trip_id)
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")

@@ -3,7 +3,7 @@ Fleet module service layer.
 Business logic for vehicle, trailer, trip, and work time management.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select, func
@@ -95,7 +95,7 @@ class VehicleService:
 
         # Update last_position_update if coordinates changed
         if "current_latitude" in update_data or "current_longitude" in update_data:
-            vehicle.last_position_update = datetime.now()
+            vehicle.last_position_update = datetime.now(timezone.utc)
 
         await self.db.flush()
         return vehicle
@@ -235,14 +235,14 @@ class TripService:
     async def start_trip(self, trip: Trip) -> Trip:
         """Start a trip by setting actual departure time."""
         trip.status = TripStatus.IN_PROGRESS
-        trip.actual_departure = datetime.now()
+        trip.actual_departure = datetime.now(timezone.utc)
         await self.db.flush()
         return trip
 
     async def complete_trip(self, trip: Trip) -> Trip:
         """Complete a trip by setting actual arrival time."""
         trip.status = TripStatus.COMPLETED
-        trip.actual_arrival = datetime.now()
+        trip.actual_arrival = datetime.now(timezone.utc)
         await self.db.flush()
         return trip
 
@@ -287,6 +287,6 @@ class WorkTimeService:
 
     async def end_work_time(self, work_time: WorkTime) -> WorkTime:
         """End a work time entry."""
-        work_time.ended_at = datetime.now()
+        work_time.ended_at = datetime.now(timezone.utc)
         await self.db.flush()
         return work_time

@@ -1,15 +1,20 @@
 """
 Orders module router.
 API endpoints for warehouse and order management.
+
+All endpoints require authentication via JWT cookie.
+Tenant isolation is enforced by extracting tenant_id from authenticated user.
 """
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.dependencies import get_current_user, require_dispatcher, require_driver
 from app.core.enums import OrderStatus
+from app.modules.auth.models import User
 from app.modules.orders.service import WarehouseService, OrderService
 from app.modules.orders.schemas import (
     WarehouseCreate,
@@ -25,31 +30,19 @@ router = APIRouter()
 
 
 # =============================================================================
-# Temporary tenant dependency (will be replaced with auth)
-# =============================================================================
-
-async def get_tenant_id(x_tenant_id: UUID = Header(...)) -> UUID:
-    """
-    Temporary dependency to get tenant_id from header.
-    Will be replaced with proper auth when implemented.
-    """
-    return x_tenant_id
-
-
-# =============================================================================
 # Warehouse Endpoints
 # =============================================================================
 
 @router.get("/warehouses", response_model=list[WarehouseRead])
 async def list_warehouses(
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     is_active: bool | None = None,
 ):
     """List all warehouses with pagination."""
-    service = WarehouseService(db, tenant_id)
+    service = WarehouseService(db, current_user.tenant_id)
     skip = (page - 1) * per_page
     warehouses, _ = await service.list_all(skip=skip, limit=per_page, is_active=is_active)
     return [WarehouseRead.model_validate(w) for w in warehouses]
@@ -58,11 +51,11 @@ async def list_warehouses(
 @router.get("/warehouses/{warehouse_id}", response_model=WarehouseRead)
 async def get_warehouse(
     warehouse_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_driver),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific warehouse by ID."""
-    service = WarehouseService(db, tenant_id)
+    service = WarehouseService(db, current_user.tenant_id)
     warehouse = await service.get_by_id(warehouse_id)
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
@@ -72,11 +65,11 @@ async def get_warehouse(
 @router.post("/warehouses", response_model=WarehouseRead, status_code=status.HTTP_201_CREATED)
 async def create_warehouse(
     data: WarehouseCreate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new warehouse."""
-    service = WarehouseService(db, tenant_id)
+    service = WarehouseService(db, current_user.tenant_id)
     warehouse = await service.create(data)
     return warehouse
 
@@ -85,11 +78,11 @@ async def create_warehouse(
 async def update_warehouse(
     warehouse_id: UUID,
     data: WarehouseUpdate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing warehouse."""
-    service = WarehouseService(db, tenant_id)
+    service = WarehouseService(db, current_user.tenant_id)
     warehouse = await service.get_by_id(warehouse_id)
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
@@ -100,11 +93,11 @@ async def update_warehouse(
 @router.delete("/warehouses/{warehouse_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_warehouse(
     warehouse_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Deactivate a warehouse (soft delete)."""
-    service = WarehouseService(db, tenant_id)
+    service = WarehouseService(db, current_user.tenant_id)
     warehouse = await service.get_by_id(warehouse_id)
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
@@ -117,14 +110,14 @@ async def delete_warehouse(
 
 @router.get("/orders", response_model=OrderList)
 async def list_orders(
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     status: OrderStatus | None = None,
 ):
     """List all orders with pagination and filtering."""
-    service = OrderService(db, tenant_id)
+    service = OrderService(db, current_user.tenant_id)
     skip = (page - 1) * per_page
     orders, total = await service.list_all(skip=skip, limit=per_page, status=status)
     return OrderList(
@@ -138,11 +131,11 @@ async def list_orders(
 @router.get("/orders/{order_id}", response_model=OrderRead)
 async def get_order(
     order_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_driver),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific order by ID."""
-    service = OrderService(db, tenant_id)
+    service = OrderService(db, current_user.tenant_id)
     order = await service.get_by_id(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -152,11 +145,11 @@ async def get_order(
 @router.post("/orders", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
 async def create_order(
     data: OrderCreate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new order."""
-    service = OrderService(db, tenant_id)
+    service = OrderService(db, current_user.tenant_id)
     
     # Check if order number already exists
     existing = await service.get_by_order_number(data.order_number)
@@ -181,11 +174,11 @@ async def create_order(
 async def update_order(
     order_id: UUID,
     data: OrderUpdate,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing order."""
-    service = OrderService(db, tenant_id)
+    service = OrderService(db, current_user.tenant_id)
     order = await service.get_by_id(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -196,11 +189,11 @@ async def update_order(
 @router.post("/orders/{order_id}/cancel", response_model=OrderRead)
 async def cancel_order(
     order_id: UUID,
-    tenant_id: UUID = Depends(get_tenant_id),
+    current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
 ):
     """Cancel an order."""
-    service = OrderService(db, tenant_id)
+    service = OrderService(db, current_user.tenant_id)
     order = await service.get_by_id(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")

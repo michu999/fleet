@@ -17,6 +17,10 @@ from app.modules.auth.schemas import (
     DriverProfileUpdate,
 )
 
+import asyncio
+import logging
+from concurrent.futures import ThreadPoolExecutor
+
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from fastapi import HTTPException
@@ -24,6 +28,11 @@ from fastapi import HTTPException
 from app.core.config import get_settings
 from app.core.config import settings
 from app.core.enums import UserRole
+
+logger = logging.getLogger(__name__)
+
+# Thread pool for blocking Google API calls
+_google_executor = ThreadPoolExecutor(max_workers=4)
 
 
 class TenantService:
@@ -175,6 +184,9 @@ async def verify_google_token(credential: str) -> dict:
     """
     Verify Google OAuth token and extract user info.
 
+    Uses thread pool executor to avoid blocking the async event loop
+    since google-auth library uses synchronous HTTP requests.
+
     Args:
         credential: Google ID token from frontend.
 
@@ -184,15 +196,18 @@ async def verify_google_token(credential: str) -> dict:
     Raises:
         HTTPException 401: If token is invalid or expired.
     """
-
     settings = get_settings()
+    loop = asyncio.get_event_loop()
 
-    try:
-        idinfo = id_token.verify_oauth2_token(
+    def _verify_token():
+        return id_token.verify_oauth2_token(
             credential,
             google_requests.Request(),
             settings.GOOGLE_CLIENT_ID,
         )
+
+    try:
+        idinfo = await loop.run_in_executor(_google_executor, _verify_token)
 
         return {
             "email": idinfo["email"],
@@ -201,9 +216,11 @@ async def verify_google_token(credential: str) -> dict:
             "google_id": idinfo["sub"],
         }
     except ValueError as e:
+        # Log the actual error for debugging, but return generic message
+        logger.warning(f"Google token verification failed: {e}")
         raise HTTPException(
             status_code=401,
-            detail=f"Invalid Google token: {e}"
+            detail="Invalid or expired Google token"
         )
 
 

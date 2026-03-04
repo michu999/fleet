@@ -14,6 +14,9 @@ from app.core.security import decode_access_token
 from app.core.enums import UserRole
 from app.modules.auth.models import User
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def get_current_user(
     request: Request,
@@ -74,8 +77,18 @@ async def get_current_user(
             detail="User account is deactivated",
         )
 
+    # Set RLS context for tenant isolation (parametrized to prevent SQL injection)
     if user.tenant_id and user.role != UserRole.SUPER_ADMIN:
-        await db.execute(text(f"SET LOCAL app.tenant_id = '{user.tenant_id}'"))
+        try:
+            validated_tenant_id = UUID(str(user.tenant_id))
+            await db.execute(text(f"SET LOCAL app.tenant_id = '{validated_tenant_id}'"))
+
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid tenant_id for user {user.tenant_id: {e}}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid tenant_id for user {user.tenant_id: {e}}",
+            )
 
     return user
 
