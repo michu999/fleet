@@ -11,9 +11,7 @@ celery_app = Celery(
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
     include=[
-        # Dodaj tutaj moduły z taskami, np.:
-        # "app.modules.notifications.tasks",
-        # "app.modules.reports.tasks",
+        "app.tasks"
     ],
 )
 

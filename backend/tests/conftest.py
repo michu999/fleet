@@ -1,6 +1,15 @@
+"""
+Pytest configuration and fixtures.
+Supports running tests both locally (localhost:5433) and in Docker (postgres:5432).
+"""
+
 import os
 
-os.environ["DATABASE_URL"] = "postgresql+asyncpg://postgres:postgres@localhost:5433/fleet"
+# Detect if running in Docker by checking for postgres hostname
+DB_HOST = os.environ.get("DB_HOST", "postgres" if os.path.exists("/.dockerenv") else "localhost")
+DB_PORT = os.environ.get("DB_PORT", "5432" if DB_HOST == "postgres" else "5433")
+
+os.environ["DATABASE_URL"] = f"postgresql+asyncpg://postgres:postgres@{DB_HOST}:{DB_PORT}/fleet"
 
 import pytest
 import asyncio
@@ -13,7 +22,7 @@ import asyncpg
 from app.main import app
 from app.core.database import Base, get_db
 
-TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5433/fleet_test"
+TEST_DATABASE_URL = f"postgresql+asyncpg://postgres:postgres@{DB_HOST}:{DB_PORT}/fleet_test"
 
 engine_test = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool)
 async_session_test = async_sessionmaker(engine_test, expire_on_commit=False, class_=AsyncSession)
@@ -32,8 +41,8 @@ async def create_test_database():
     conn = await asyncpg.connect(
         user="postgres",
         password="postgres",
-        host="localhost",
-        port=5433,
+        host=DB_HOST,
+        port=int(DB_PORT),
         database="postgres"
     )
     try:
@@ -56,8 +65,8 @@ async def create_test_database():
     conn = await asyncpg.connect(
         user="postgres",
         password="postgres",
-        host="localhost",
-        port=5433,
+        host=DB_HOST,
+        port=int(DB_PORT),
         database="postgres"
     )
     try:

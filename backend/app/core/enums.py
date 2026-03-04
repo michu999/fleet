@@ -12,6 +12,17 @@ This provides:
 from enum import Enum
 
 
+class TenantPlan(str, Enum):
+    """
+    Tenant subscription plans.
+    Controls features and limits available to the tenant.
+    """
+    TRIAL = "trial"         # 14-day trial
+    BASIC = "basic"         # Basic features
+    PROFESSIONAL = "professional"  # All features
+    ENTERPRISE = "enterprise"  # Custom limits + support
+
+
 class UserRole(str, Enum):
     """
     User roles in the system.

@@ -9,12 +9,12 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.core.enums import UserRole
+from app.core.enums import UserRole, TenantPlan
 
 if TYPE_CHECKING:
     from app.modules.fleet.models import Trip, WorkTime, Vehicle, Trailer
@@ -46,6 +46,16 @@ class Tenant(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    plan: Mapped[str] = mapped_column(
+        String(50),
+        default=TenantPlan.TRIAL.value,
+        nullable=False,
+    )
+    max_users: Mapped[int] = mapped_column(
+        Integer,
+        default=10,
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

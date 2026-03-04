@@ -20,6 +20,7 @@ from app.modules.fleet.router import router as fleet_router
 from app.modules.orders.router import router as orders_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.reports.router import router as reports_router
+from app.modules.admin.router import router as admin_router
 
 # Rate limiter setup
 limiter = Limiter(key_func=get_remote_address)
@@ -76,3 +77,4 @@ app.include_router(fleet_router, prefix="/api/v1/fleet", tags=["Fleet"])
 app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(reports_router, prefix="/api/v1/reports", tags=["Reports"])
+app.include_router(admin_router, prefix="/api/v1/admin", tags=["Admin"])
