@@ -134,7 +134,7 @@ class User(Base):
         PG_UUID(as_uuid=True),
         ForeignKey("tenants.id", ondelete="CASCADE"),
         index=True,
-        nullable=False,
+        nullable=True,
     )
     email: Mapped[str] = mapped_column(
         String(255),

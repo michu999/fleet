@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 1025
     EMAIL_FROM: str = "noreply@fleet.local"
+    SUPER_ADMIN_EMAIL_LIST: list[str] = []
 
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]

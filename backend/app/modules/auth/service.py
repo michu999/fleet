@@ -17,6 +17,14 @@ from app.modules.auth.schemas import (
     DriverProfileUpdate,
 )
 
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from fastapi import HTTPException
+
+from app.core.config import get_settings
+from app.core.config import settings
+from app.core.enums import UserRole
+
 
 class TenantService:
     """Service for tenant operations."""
@@ -157,3 +165,143 @@ class DriverProfileService:
             setattr(profile, field, value)
         await self.db.flush()
         return profile
+
+
+# =============================================================================
+# Google OAuth 2.0 Functions
+# =============================================================================
+
+async def verify_google_token(credential: str) -> dict:
+    """
+    Verify Google OAuth token and extract user info.
+
+    Args:
+        credential: Google ID token from frontend.
+
+    Returns:
+        Dict with user info: {email, name, picture, google_id}
+
+    Raises:
+        HTTPException 401: If token is invalid or expired.
+    """
+
+    settings = get_settings()
+
+    try:
+        idinfo = id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID,
+        )
+
+        return {
+            "email": idinfo["email"],
+            "name": idinfo.get("name", ""),
+            "picture": idinfo.get("picture"),
+            "google_id": idinfo["sub"],
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Invalid Google token: {e}"
+        )
+
+
+async def get_user_by_email_global(db: AsyncSession, email: str) -> User | None:
+    """
+    Find user by email across all tenants.
+    Used for OAuth login where we don't know tenant yet.
+
+    Args:
+        db: Database session.
+        email: User's email address.
+
+    Returns:
+        User if found, None otherwise.
+    """
+    result = await db.execute(
+        select(User).where(User.email == email)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_or_create_oauth_user(
+    db: AsyncSession,
+    google_data: dict,
+) -> tuple[User, bool]:
+    """
+    Find existing user by email or create new one with tenant.
+
+    For new users:
+    - Creates a new Tenant based on email domain
+    - Creates user as ADMIN of that tenant
+
+    For existing users:
+    - Updates profile data from Google (name, picture, google_id)
+
+    Args:
+        db: Database session.
+        google_data: Dict from verify_google_token with email, name, picture, google_id.
+
+    Returns:
+        Tuple of (User, is_new_user: bool)
+    """
+
+    # Try to find existing user
+    existing = await get_user_by_email_global(db, google_data["email"])
+
+    if existing:
+        # Update profile data from Google
+        existing.name = google_data["name"]
+        existing.picture = google_data["picture"]
+        existing.google_id = google_data["google_id"]
+        await db.commit()
+        await db.refresh(existing)
+        return existing, False
+
+    if google_data["email"] in settings.SUPER_ADMIN_EMAIL_LIST:
+        user = User(
+            email=google_data["email"],
+            name=google_data["name"],
+            picture=google_data["picture"],
+            google_id=google_data["google_id"],
+            role=UserRole.SUPER_ADMIN,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user, True
+
+    # New user — create tenant first, then user
+    domain = google_data["email"].split("@")[1]
+    slug = domain.replace(".", "-")
+
+    # Check if tenant with this slug exists (avoid duplicates)
+    existing_tenant = await db.execute(
+        select(Tenant).where(Tenant.slug == slug)
+    )
+    tenant = existing_tenant.scalar_one_or_none()
+
+    if not tenant:
+        tenant = Tenant(
+            name=domain,
+            slug=slug,
+            domain=domain,
+        )
+        db.add(tenant)
+        await db.flush()  # Get tenant.id without full commit
+
+    user = User(
+        tenant_id=tenant.id,
+        email=google_data["email"],
+        name=google_data["name"],
+        picture=google_data["picture"],
+        google_id=google_data["google_id"],
+        role=UserRole.ADMIN,  # First user in tenant is admin
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return user, True
+

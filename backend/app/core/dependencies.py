@@ -1,0 +1,133 @@
+"""
+FastAPI dependency injection functions.
+Authentication and authorization dependencies.
+"""
+
+from uuid import UUID
+
+from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.security import decode_access_token
+from app.core.enums import UserRole
+from app.modules.auth.models import User
+
+
+async def get_current_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Get current authenticated user from JWT cookie.
+
+    Extracts token from httpOnly cookie, validates it,
+    and returns the User object from database.
+
+    Raises:
+        HTTPException 401: If not authenticated or token invalid.
+    """
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID in token",
+        )
+
+    result = await db.execute(
+        select(User).where(User.id == user_uuid)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is deactivated",
+        )
+
+    if user.tenant_id and user.role != UserRole.SUPER_ADMIN:
+        await db.execute(text(f"SET LOCAL app.tenant_id = '{user.tenant_id}'"))
+
+    return user
+
+
+def require_role(*roles: UserRole):
+    """
+    Dependency factory for role-based access control.
+
+    Usage:
+        @router.get("/admin-only")
+        async def admin_endpoint(
+            user: User = Depends(require_role(UserRole.ADMIN))
+        ):
+            ...
+
+        # Multiple roles:
+        @router.get("/managers")
+        async def managers_endpoint(
+            user: User = Depends(require_role(UserRole.ADMIN, UserRole.MANAGER))
+        ):
+            ...
+
+    Note:
+        SUPER_ADMIN always passes regardless of required roles.
+
+    Returns:
+        Dependency function that validates user role.
+
+    Raises:
+        HTTPException 403: If user doesn't have required role.
+    """
+    async def checker(
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        # SUPER_ADMIN bypasses all role checks
+        if current_user.role == UserRole.SUPER_ADMIN:
+            return current_user
+
+        if current_user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+
+        return current_user
+
+    return checker
+
+
+# Convenience dependencies for common role checks
+require_admin = require_role(UserRole.ADMIN)
+require_manager = require_role(UserRole.ADMIN, UserRole.MANAGER)
+require_dispatcher = require_role(UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER)
+require_driver = require_role(UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER, UserRole.DRIVER)
+
