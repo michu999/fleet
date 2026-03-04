@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Truck } from "lucide-react";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+console.log("CLIENT ID:", JSON.stringify(GOOGLE_CLIENT_ID));
 
 function LoginContent() {
   const navigate = useNavigate();
@@ -71,7 +72,6 @@ function LoginContent() {
                 onError={() => {
                   toast.error("Błąd logowania Google. Spróbuj ponownie.");
                 }}
-                useOneTap
                 theme="outline"
                 size="large"
                 text="signin_with"
