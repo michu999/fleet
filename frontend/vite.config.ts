@@ -11,16 +11,18 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',  // required for Docker
     port: 3000,
-    host: true,
     proxy: {
       '/api': {
         target: 'http://backend:8000',
         changeOrigin: true,
+        secure: false,
       },
       '/auth': {
         target: 'http://backend:8000',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

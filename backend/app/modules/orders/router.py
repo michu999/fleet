@@ -108,7 +108,7 @@ async def delete_warehouse(
 # Order Endpoints
 # =============================================================================
 
-@router.get("/orders", response_model=OrderList)
+@router.get("", response_model=OrderList)
 async def list_orders(
     current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
@@ -128,7 +128,7 @@ async def list_orders(
     )
 
 
-@router.get("/orders/{order_id}", response_model=OrderRead)
+@router.get("/{order_id}", response_model=OrderRead)
 async def get_order(
     order_id: UUID,
     current_user: User = Depends(require_driver),
@@ -142,7 +142,7 @@ async def get_order(
     return order
 
 
-@router.post("/orders", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
 async def create_order(
     data: OrderCreate,
     current_user: User = Depends(require_dispatcher),
@@ -170,7 +170,7 @@ async def create_order(
     return order
 
 
-@router.patch("/orders/{order_id}", response_model=OrderRead)
+@router.patch("/{order_id}", response_model=OrderRead)
 async def update_order(
     order_id: UUID,
     data: OrderUpdate,
@@ -186,7 +186,7 @@ async def update_order(
     return updated
 
 
-@router.post("/orders/{order_id}/cancel", response_model=OrderRead)
+@router.post("/{order_id}/cancel", response_model=OrderRead)
 async def cancel_order(
     order_id: UUID,
     current_user: User = Depends(require_dispatcher),

@@ -6,6 +6,7 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from typing import Optional
 
 
 # =============================================================================
@@ -53,7 +54,7 @@ class UserBase(BaseModel):
 class UserRead(UserBase):
     """Schema for reading a user."""
     id: UUID
-    tenant_id: UUID
+    tenant_id: Optional[UUID] = None
     picture: str | None
     google_id: str | None
     role: str

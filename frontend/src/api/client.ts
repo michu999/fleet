@@ -5,13 +5,12 @@
 import axios, { AxiosError, type AxiosInstance } from "axios";
 import type { ApiError } from "@/types";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
-
 /**
  * Create axios instance with default configuration
+ * Using relative path - Vite proxy handles routing to backend
  */
 const client: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: "/api/v1",  // relative - goes through Vite proxy
   withCredentials: true, // CRITICAL: required for httpOnly cookies
   headers: {
     "Content-Type": "application/json",

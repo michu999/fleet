@@ -53,7 +53,16 @@ class Settings(BaseSettings):
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 1025
     EMAIL_FROM: str = "noreply@fleet.local"
-    SUPER_ADMIN_EMAIL_LIST: list[str] = []
+    SUPER_ADMIN_EMAIL_LIST: str = ""
+
+    def get_super_admin_emails(self) -> list[str]:
+        if not self.SUPER_ADMIN_EMAIL_LIST:
+            return []
+        return [
+            email.strip()
+            for email in self.SUPER_ADMIN_EMAIL_LIST.split(",")
+            if email.strip()
+        ]
 
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]

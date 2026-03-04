@@ -204,6 +204,7 @@ async def verify_google_token(credential: str) -> dict:
             credential,
             google_requests.Request(),
             settings.GOOGLE_CLIENT_ID,
+            clock_skew_in_seconds=10,
         )
 
     try:
@@ -276,13 +277,13 @@ async def get_or_create_oauth_user(
         await db.refresh(existing)
         return existing, False
 
-    if google_data["email"] in settings.SUPER_ADMIN_EMAIL_LIST:
+    if google_data["email"] in settings.get_super_admin_emails():
         user = User(
             email=google_data["email"],
             name=google_data["name"],
             picture=google_data["picture"],
             google_id=google_data["google_id"],
-            role=UserRole.SUPER_ADMIN,
+            role=UserRole.SUPER_ADMIN.value,
         )
         db.add(user)
         await db.commit()
