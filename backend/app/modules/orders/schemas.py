@@ -47,6 +47,13 @@ class WarehouseRead(WarehouseBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class WarehouseList(BaseModel):
+    """Schema for listing warehouses."""
+    items: list[WarehouseRead]
+    total: int
+    page: int
+    per_page: int
+
 
 # =============================================================================
 # Order Schemas

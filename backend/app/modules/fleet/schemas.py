@@ -96,6 +96,13 @@ class TrailerRead(TrailerBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class TrailerList(BaseModel):
+    """Schema for listing trailers."""
+    items: list[TrailerRead]
+    total: int
+    page: int
+    per_page: int
+
 
 # =============================================================================
 # Trip Schemas
@@ -142,6 +149,13 @@ class TripRead(TripBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class TripList(BaseModel):
+    """Schema for listing trips."""
+    items: list[TripRead]
+    total: int
+    page: int
+    per_page: int
+
 
 # =============================================================================
 # WorkTime Schemas
@@ -172,5 +186,12 @@ class WorkTimeRead(WorkTimeBase):
     tenant_id: UUID
     ended_at: datetime | None
     created_at: datetime
+
+class WorkTimeList(BaseModel):
+    """Schema for listing work time entries."""
+    items: list[WorkTimeRead]
+    total: int
+    page: int
+    per_page: int
 
     model_config = ConfigDict(from_attributes=True)

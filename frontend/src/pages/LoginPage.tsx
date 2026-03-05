@@ -80,8 +80,6 @@ function LoginContent() {
             ) : (
               <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-center text-sm text-destructive">
                 Brak konfiguracji Google OAuth.
-                <br />
-                Ustaw VITE_GOOGLE_CLIENT_ID w pliku .env
               </div>
             )}
           </div>

@@ -40,6 +40,13 @@ class TenantRead(TenantBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class TenantList(BaseModel):
+    """Schema for listing tenants."""
+    items: list[TenantRead]
+    total: int
+    page: int
+    per_page: int
+
 
 # =============================================================================
 # User Schemas
@@ -70,6 +77,13 @@ class UserUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     role: str | None = None
     is_active: bool | None = None
+
+class UserList(BaseModel):
+    """Schema for listing users."""
+    items: list[UserRead]
+    total: int
+    page: int
+    per_page: int
 
 
 # =============================================================================
@@ -115,3 +129,10 @@ class DriverProfileRead(DriverProfileBase):
     hire_date: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
+
+class DriverList[BaseModel]:
+    """Schema for listing driver profiles."""
+    items: list[DriverProfileRead]
+    total: int
+    page: int
+    per_page: int
