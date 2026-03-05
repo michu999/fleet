@@ -5,9 +5,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ordersApi } from "@/api";
+import { ordersApi, warehouseApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -32,9 +35,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Plus, MoreHorizontal, Loader2, Package, Filter } from "lucide-react";
 import { OrderStatus } from "@/types";
-import type { Order } from "@/types";
+import type { Order, Warehouse } from "@/types";
 
-// Status badge configuration
 const orderStatusConfig: Record<OrderStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" }> = {
   [OrderStatus.PENDING]: { label: "Oczekujące", variant: "warning" },
   [OrderStatus.ASSIGNED]: { label: "Przypisane", variant: "secondary" },
@@ -54,10 +56,25 @@ const statusFilterOptions = [
   { value: OrderStatus.CANCELLED, label: "Anulowane" },
 ];
 
+const emptyForm = {
+  order_number: "",
+  origin_warehouse_id: "",
+  destination_warehouse_id: "",
+  client_name: "",
+  client_contact: "",
+  cargo_description: "",
+  weight_kg: "",
+  volume_m3: "",
+  deadline_at: "",
+  notes: "",
+};
+
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(emptyForm);
   const queryClient = useQueryClient();
 
   // Fetch orders
@@ -70,11 +87,45 @@ export default function OrdersPage() {
       }),
   });
 
+  // Fetch warehouses
+  const { data: warehousesData } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: () => warehouseApi.list({ per_page: 100 }),
+  });
+
+  // Create mutation
+  const createMutation = useMutation({
+    mutationFn: () =>
+      ordersApi.create({
+        order_number: createForm.order_number,
+        client_name: createForm.client_name,
+        origin_warehouse_id: createForm.origin_warehouse_id,
+        destination_warehouse_id: createForm.destination_warehouse_id,
+        client_contact: createForm.client_contact || undefined,
+        cargo_description: createForm.cargo_description || undefined,
+        weight_kg: createForm.weight_kg ? parseFloat(createForm.weight_kg) : undefined,
+        volume_m3: createForm.volume_m3 ? parseFloat(createForm.volume_m3) : undefined,
+        deadline_at: createForm.deadline_at
+          ? new Date(createForm.deadline_at).toISOString()
+          : undefined,
+        notes: createForm.notes || undefined,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+      toast.success("Zamówienie zostało utworzone");
+      setCreateDialogOpen(false);
+      setCreateForm(emptyForm);
+    },
+    onError: (error: { message: string }) => {
+      toast.error(error.message || "Błąd podczas tworzenia zamówienia");
+    },
+  });
+
   // Cancel mutation
   const cancelMutation = useMutation({
     mutationFn: (id: string) => ordersApi.cancel(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
       toast.success("Zamówienie zostało anulowane");
       setCancelDialogOpen(false);
       setOrderToCancel(null);
@@ -85,6 +136,7 @@ export default function OrdersPage() {
   });
 
   const orders = data?.data?.items || [];
+  const warehouses: Warehouse[] = warehousesData?.data?.items || [];
 
   const handleCancelClick = (order: Order) => {
     setOrderToCancel(order);
@@ -116,7 +168,7 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold">Zamówienia</h1>
-        <Button disabled>
+        <Button onClick={() => setCreateDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Nowe zamówienie
         </Button>
@@ -223,6 +275,152 @@ export default function OrdersPage() {
           </Table>
         </div>
       )}
+
+      {/* Create Order Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Nowe zamówienie</DialogTitle>
+            <DialogDescription>
+              Wypełnij dane nowego zamówienia transportowego.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="order_number">Nr zamówienia *</Label>
+                <Input
+                  id="order_number"
+                  placeholder="ORD-2024-001"
+                  value={createForm.order_number}
+                  onChange={(e) => setCreateForm(p => ({ ...p, order_number: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client_name">Klient *</Label>
+                <Input
+                  id="client_name"
+                  placeholder="Nazwa klienta"
+                  value={createForm.client_name}
+                  onChange={(e) => setCreateForm(p => ({ ...p, client_name: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Magazyn nadania *</Label>
+                <select
+                  value={createForm.origin_warehouse_id}
+                  onChange={(e) => setCreateForm(p => ({ ...p, origin_warehouse_id: e.target.value }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Wybierz magazyn...</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Magazyn docelowy *</Label>
+                <select
+                  value={createForm.destination_warehouse_id}
+                  onChange={(e) => setCreateForm(p => ({ ...p, destination_warehouse_id: e.target.value }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Wybierz magazyn...</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="client_contact">Kontakt do klienta</Label>
+                <Input
+                  id="client_contact"
+                  placeholder="tel. lub email"
+                  value={createForm.client_contact}
+                  onChange={(e) => setCreateForm(p => ({ ...p, client_contact: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deadline_at">Termin dostawy</Label>
+                <Input
+                  id="deadline_at"
+                  type="datetime-local"
+                  value={createForm.deadline_at}
+                  onChange={(e) => setCreateForm(p => ({ ...p, deadline_at: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="weight_kg">Waga (kg)</Label>
+                <Input
+                  id="weight_kg"
+                  type="number"
+                  placeholder="np. 1500"
+                  value={createForm.weight_kg}
+                  onChange={(e) => setCreateForm(p => ({ ...p, weight_kg: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="volume_m3">Objętość (m³)</Label>
+                <Input
+                  id="volume_m3"
+                  type="number"
+                  placeholder="np. 12.5"
+                  value={createForm.volume_m3}
+                  onChange={(e) => setCreateForm(p => ({ ...p, volume_m3: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cargo_description">Opis ładunku</Label>
+              <Textarea
+                id="cargo_description"
+                placeholder="Co jest przewożone..."
+                value={createForm.cargo_description}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setCreateForm(p => ({ ...p, cargo_description: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Uwagi</Label>
+              <Textarea
+                id="notes"
+                placeholder="Dodatkowe informacje..."
+                value={createForm.notes}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setCreateForm(p => ({ ...p, notes: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              Anuluj
+            </Button>
+            <Button
+              onClick={() => createMutation.mutate()}
+              disabled={
+                createMutation.isPending ||
+                !createForm.order_number ||
+                !createForm.client_name ||
+                !createForm.origin_warehouse_id ||
+                !createForm.destination_warehouse_id
+              }
+            >
+              {createMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Utwórz zamówienie
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
