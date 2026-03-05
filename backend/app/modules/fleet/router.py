@@ -24,9 +24,11 @@ from app.modules.fleet.schemas import (
     TrailerCreate,
     TrailerUpdate,
     TrailerRead,
+    TrailerList,
     TripCreate,
     TripUpdate,
     TripRead,
+    TripList,
 )
 
 router = APIRouter()
@@ -135,7 +137,7 @@ async def delete_vehicle(
 # Trailer Endpoints
 # =============================================================================
 
-@router.get("/trailers", response_model=list[TrailerRead])
+@router.get("/trailers", response_model=TrailerList)
 async def list_trailers(
     current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
@@ -196,7 +198,7 @@ async def update_trailer(
 # Trip Endpoints
 # =============================================================================
 
-@router.get("/trips", response_model=list[TripRead])
+@router.get("/trips", response_model=TripList)
 async def list_trips(
     current_user: User = Depends(require_driver),
     db: AsyncSession = Depends(get_db),

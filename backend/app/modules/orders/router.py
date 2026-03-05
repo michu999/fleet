@@ -20,6 +20,7 @@ from app.modules.orders.schemas import (
     WarehouseCreate,
     WarehouseUpdate,
     WarehouseRead,
+    WarehouseList,
     OrderCreate,
     OrderUpdate,
     OrderRead,
@@ -33,7 +34,7 @@ router = APIRouter()
 # Warehouse Endpoints
 # =============================================================================
 
-@router.get("/warehouses", response_model=list[WarehouseRead])
+@router.get("/warehouses", response_model=WarehouseList)
 async def list_warehouses(
     current_user: User = Depends(require_dispatcher),
     db: AsyncSession = Depends(get_db),
