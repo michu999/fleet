@@ -14,9 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Truck, Package, CheckCircle, Clock, Loader2 } from "lucide-react";
-import { VehicleStatus, OrderStatus } from "@/types";
-import type { Vehicle, Order } from "@/types";
+import { Truck, Package, CheckCircle, Clock, Loader2, } from "lucide-react";
+import { VehicleStatus, OrderStatus, } from "@/types";
+import type { Vehicle, Order, } from "@/types";
 
 // Status badge configuration
 const orderStatusConfig: Record<OrderStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" }> = {

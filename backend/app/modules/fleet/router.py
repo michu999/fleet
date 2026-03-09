@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, require_dispatcher, require_driver
+from app.core.dependencies import get_current_user, require_dispatcher, require_driver, require_dispatcher_tenant, require_driver_tenant
 from app.core.enums import VehicleStatus, TrailerStatus, TripStatus
 from app.modules.auth.models import User
 from app.modules.fleet.service import VehicleService, TrailerService, TripService
@@ -75,7 +75,7 @@ async def get_vehicle(
 @router.post("/vehicles", response_model=VehicleRead, status_code=status.HTTP_201_CREATED)
 async def create_vehicle(
     data: VehicleCreate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new vehicle."""
@@ -97,7 +97,7 @@ async def create_vehicle(
 async def update_vehicle(
     vehicle_id: UUID,
     data: VehicleUpdate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing vehicle."""
@@ -122,7 +122,7 @@ async def update_vehicle(
 @router.delete("/vehicles/{vehicle_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_vehicle(
     vehicle_id: UUID,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Soft delete a vehicle (set status to inactive)."""
@@ -169,7 +169,7 @@ async def get_trailer(
 @router.post("/trailers", response_model=TrailerRead, status_code=status.HTTP_201_CREATED)
 async def create_trailer(
     data: TrailerCreate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new trailer."""
@@ -182,7 +182,7 @@ async def create_trailer(
 async def update_trailer(
     trailer_id: UUID,
     data: TrailerUpdate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing trailer."""
@@ -233,7 +233,7 @@ async def get_trip(
 @router.post("/trips", response_model=TripRead, status_code=status.HTTP_201_CREATED)
 async def create_trip(
     data: TripCreate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new trip."""
@@ -246,7 +246,7 @@ async def create_trip(
 async def update_trip(
     trip_id: UUID,
     data: TripUpdate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing trip."""
@@ -261,7 +261,7 @@ async def update_trip(
 @router.post("/trips/{trip_id}/start", response_model=TripRead)
 async def start_trip(
     trip_id: UUID,
-    current_user: User = Depends(require_driver),
+    current_user: User = Depends(require_driver_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Start a trip (set actual departure time)."""
@@ -278,7 +278,7 @@ async def start_trip(
 @router.post("/trips/{trip_id}/complete", response_model=TripRead)
 async def complete_trip(
     trip_id: UUID,
-    current_user: User = Depends(require_driver),
+    current_user: User = Depends(require_driver_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Complete a trip (set actual arrival time)."""

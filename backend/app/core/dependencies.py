@@ -137,6 +137,27 @@ def require_role(*roles: UserRole):
 
     return checker
 
+def require_role_with_tenant(*roles: UserRole):
+    """
+    Like require_role but also ensures user has tenant_id if the user doesnt have tenant_id then he is a super admin.
+    Use for all endpoints that create/modify operational data.
+    """
+    async def checker(
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        if current_user.role == UserRole.SUPER_ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Super admin must use a tenant account for this operation.",
+            )
+        if current_user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return current_user
+    return checker
+
 
 # Convenience dependencies for common role checks
 require_admin = require_role(UserRole.ADMIN)
@@ -144,3 +165,8 @@ require_manager = require_role(UserRole.ADMIN, UserRole.MANAGER)
 require_dispatcher = require_role(UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER)
 require_driver = require_role(UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER, UserRole.DRIVER)
 
+# Convenience dependencies for role checks that also require tenant_id (for operational data endpoints)
+require_admin_tenant = require_role_with_tenant(UserRole.ADMIN)
+require_manager_tenant = require_role_with_tenant(UserRole.ADMIN, UserRole.MANAGER)
+require_dispatcher_tenant = require_role_with_tenant(UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER)
+require_driver_tenant = require_role_with_tenant(UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER, UserRole.DRIVER)

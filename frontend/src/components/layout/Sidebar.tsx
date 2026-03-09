@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   LayoutDashboard,
   Truck,
+  Warehouse,
   Package,
   ChevronLeft,
   ChevronRight,
@@ -17,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import type { UserRole } from "@/types";
+import { UserRole } from "@/types";
 
 interface NavItem {
   title: string;
@@ -25,23 +26,40 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-const navItems: NavItem[] = [
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Pojazdy",
-    href: "/vehicles",
-    icon: Truck,
-  },
-  {
-    title: "Zamówienia",
-    href: "/orders",
-    icon: Package,
-  },
-];
+const getNavItems = (role: UserRole): NavItem[] => {
+  const items: NavItem[] = [
+    {
+      title: "Dashboard",
+      href: "/dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      title: "Pojazdy",
+      href: "/vehicles",
+      icon: Truck,
+    },
+    {
+      title: "Zamówienia",
+      href: "/orders",
+      icon: Package,
+    },
+  ];
+
+  if (
+    role === UserRole.SUPER_ADMIN ||
+    role === UserRole.ADMIN ||
+    role === UserRole.DISPATCHER
+  ) {
+    items.push({
+      title: "Lokalizacje",
+      href: "/warehouses",
+      icon: Warehouse,
+    });
+  }
+
+  return items;
+};
+
 
 const roleLabels: Record<UserRole, string> = {
   super_admin: "Super Admin",
@@ -55,6 +73,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { user, logout, isLoggingOut } = useAuth();
+  const navItems = user ? getNavItems(user.role) : [];
 
   const getInitials = (name: string) => {
     return name

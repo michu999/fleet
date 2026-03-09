@@ -14,30 +14,30 @@ import type {
 
 export const warehouseApi = {
   /**
-   * List all vehicles with pagination
+   * List all warehouses with pagination
    */
   list: (params?: PaginationParams) =>
-    client.get<PaginatedResponse<Warehouse>>("/warehouses", { params }),
+    client.get<PaginatedResponse<Warehouse>>("/orders/warehouses", { params }),
 
   /**
-   * Get single vehicle by ID
+   * Get single warehouse by ID
    */
-  getById: (id: string) => client.get<Warehouse>(`/warehouses/${id}`),
+  getById: (id: string) => client.get<Warehouse>(`/orders/warehouses/${id}`),
 
   /**
    * Create new vehicle
    */
   create: (data: WarehouseCreate) =>
-    client.post<Warehouse>("/warehouses", data),
+    client.post<Warehouse>("/orders/warehouses", data),
 
   /**
-   * Update existing vehicle
+   * Update existing warehouse
    */
   update: (id: string, data: WarehouseUpdate) =>
     client.patch<Warehouse>(`/warehouses/${id}`, data),
 
   /**
-   * Delete vehicle
+   * Delete warehouse
    */
   delete: (id: string) => client.delete(`/warehouses/${id}`),
 };

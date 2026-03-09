@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, require_dispatcher, require_driver
+from app.core.dependencies import get_current_user, require_dispatcher, require_driver, require_dispatcher_tenant, require_driver_tenant
 from app.core.enums import OrderStatus
 from app.modules.auth.models import User
 from app.modules.orders.service import WarehouseService, OrderService
@@ -45,8 +45,13 @@ async def list_warehouses(
     """List all warehouses with pagination."""
     service = WarehouseService(db, current_user.tenant_id)
     skip = (page - 1) * per_page
-    warehouses, _ = await service.list_all(skip=skip, limit=per_page, is_active=is_active)
-    return [WarehouseRead.model_validate(w) for w in warehouses]
+    warehouses, total = await service.list_all(skip=skip, limit=per_page, is_active=is_active)
+    return WarehouseList(
+        items=[WarehouseRead.model_validate(w) for w in warehouses],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.get("/warehouses/{warehouse_id}", response_model=WarehouseRead)
@@ -66,10 +71,13 @@ async def get_warehouse(
 @router.post("/warehouses", response_model=WarehouseRead, status_code=status.HTTP_201_CREATED)
 async def create_warehouse(
     data: WarehouseCreate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new warehouse."""
+    if not current_user.tenant_id:
+        raise HTTPException(400, "Use a tenant account to create operational data")
+
     service = WarehouseService(db, current_user.tenant_id)
     warehouse = await service.create(data)
     return warehouse
@@ -79,7 +87,7 @@ async def create_warehouse(
 async def update_warehouse(
     warehouse_id: UUID,
     data: WarehouseUpdate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing warehouse."""
@@ -94,7 +102,7 @@ async def update_warehouse(
 @router.delete("/warehouses/{warehouse_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_warehouse(
     warehouse_id: UUID,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Deactivate a warehouse (soft delete)."""
@@ -111,7 +119,7 @@ async def delete_warehouse(
 
 @router.get("", response_model=OrderList)
 async def list_orders(
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -132,7 +140,7 @@ async def list_orders(
 @router.get("/{order_id}", response_model=OrderRead)
 async def get_order(
     order_id: UUID,
-    current_user: User = Depends(require_driver),
+    current_user: User = Depends(require_driver_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific order by ID."""
@@ -146,7 +154,7 @@ async def get_order(
 @router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
 async def create_order(
     data: OrderCreate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new order."""
@@ -175,7 +183,7 @@ async def create_order(
 async def update_order(
     order_id: UUID,
     data: OrderUpdate,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing order."""
@@ -190,7 +198,7 @@ async def update_order(
 @router.post("/{order_id}/cancel", response_model=OrderRead)
 async def cancel_order(
     order_id: UUID,
-    current_user: User = Depends(require_dispatcher),
+    current_user: User = Depends(require_dispatcher_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Cancel an order."""

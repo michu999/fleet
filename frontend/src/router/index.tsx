@@ -21,6 +21,7 @@ import OrdersPage from "@/pages/OrdersPage";
 
 // Layout
 import { AppLayout } from "@/components/layout/AppLayout";
+import WarehousesPage from "@/pages/WarehousesPage.tsx";
 
 /**
  * Loading spinner component
@@ -97,6 +98,7 @@ export function AppRouter() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/vehicles" element={<VehiclesPage />} />
           <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/warehouses" element={<ProtectedRoute><WarehousesPage /></ProtectedRoute>} />
         </Route>
 
         {/* Redirects */}

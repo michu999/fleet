@@ -51,6 +51,10 @@ export enum TenantPlan {
   PROFESSIONAL = "professional",
   ENTERPRISE = "enterprise",
 }
+export enum WarehouseStatus {
+  ACTIVE = "active",
+  INACTIVE = "inactive",
+}
 
 // =============================================================================
 // User & Auth

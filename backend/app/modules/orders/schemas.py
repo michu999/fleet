@@ -25,8 +25,12 @@ class WarehouseBase(BaseModel):
 
 class WarehouseCreate(WarehouseBase):
     """Schema for creating a new warehouse."""
-    pass
-
+    name: str | None = Field(None, min_length=1, max_length=255)
+    address: str | None = Field(None, min_length=1, max_length=255)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    warehouse_type: WarehouseType = WarehouseType.WAREHOUSE
+    is_active: bool | None = True
 
 class WarehouseUpdate(BaseModel):
     """Schema for updating a warehouse."""
