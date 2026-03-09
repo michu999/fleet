@@ -6,36 +6,28 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ordersApi, warehouseApi } from "@/api";
+import { useTableFilters } from "@/hooks/useTableFilters";
+import { TableToolbar } from "@/components/ui/table-toolbar";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, MoreHorizontal, Loader2, Package, Filter } from "lucide-react";
 import { OrderStatus } from "@/types";
 import type { Order, Warehouse } from "@/types";
+
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 const orderStatusConfig: Record<OrderStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" }> = {
   [OrderStatus.PENDING]: { label: "Oczekujące", variant: "warning" },
@@ -69,15 +61,15 @@ const emptyForm = {
   notes: "",
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyForm);
+  const [cancelDialog, setCancelDialog] = useState({ open: false, id: "", label: "" });
   const queryClient = useQueryClient();
 
-  // Fetch orders
   const { data, isLoading, error } = useQuery({
     queryKey: ["orders", statusFilter],
     queryFn: () =>
@@ -87,13 +79,18 @@ export default function OrdersPage() {
       }),
   });
 
-  // Fetch warehouses
   const { data: warehousesData } = useQuery({
     queryKey: ["warehouses"],
     queryFn: () => warehouseApi.list({ per_page: 100 }),
   });
 
-  // Create mutation
+  const orders = data?.data?.items || [];
+  const warehouses: Warehouse[] = warehousesData?.data?.items || [];
+
+  const { search, setSearch, filtered } = useTableFilters(orders, {
+    searchFields: ["order_number", "client_name"],
+  });
+
   const createMutation = useMutation({
     mutationFn: () =>
       ordersApi.create({
@@ -121,51 +118,31 @@ export default function OrdersPage() {
     },
   });
 
-  // Cancel mutation
   const cancelMutation = useMutation({
     mutationFn: (id: string) => ordersApi.cancel(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
       toast.success("Zamówienie zostało anulowane");
-      setCancelDialogOpen(false);
-      setOrderToCancel(null);
+      setCancelDialog({ open: false, id: "", label: "" });
     },
     onError: (error: { message: string }) => {
       toast.error(error.message || "Błąd podczas anulowania zamówienia");
     },
   });
 
-  const orders = data?.data?.items || [];
-  const warehouses: Warehouse[] = warehousesData?.data?.items || [];
-
-  const handleCancelClick = (order: Order) => {
-    setOrderToCancel(order);
-    setCancelDialogOpen(true);
-  };
-
-  const handleConfirmCancel = () => {
-    if (orderToCancel) {
-      cancelMutation.mutate(orderToCancel.id);
-    }
-  };
-
-  const canCancel = (status: OrderStatus) => {
-    return status === OrderStatus.PENDING || status === OrderStatus.ASSIGNED;
-  };
+  const canCancel = (status: OrderStatus) =>
+    status === OrderStatus.PENDING || status === OrderStatus.ASSIGNED;
 
   if (error) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="text-center text-destructive">
-          Błąd podczas ładowania zamówień
-        </div>
+        <div className="text-center text-destructive">Błąd podczas ładowania zamówień</div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold">Zamówienia</h1>
         <Button onClick={() => setCreateDialogOpen(true)}>
@@ -174,36 +151,37 @@ export default function OrdersPage() {
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            {statusFilterOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <TableToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Szukaj po numerze zamówienia, kliencie..."
+        extra={
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {statusFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+        }
+      />
 
-      {/* Table */}
       {isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
-      ) : orders.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center text-center">
           <Package className="mb-4 h-12 w-12 text-muted-foreground" />
           <h3 className="text-lg font-semibold">Brak zamówień</h3>
           <p className="text-muted-foreground">
-            {statusFilter
-              ? "Nie znaleziono zamówień o wybranym statusie"
+            {statusFilter || search
+              ? "Nie znaleziono zamówień o podanych kryteriach"
               : "Utwórz pierwsze zamówienie"}
           </p>
         </div>
@@ -222,13 +200,11 @@ export default function OrdersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.map((order: Order) => {
+              {filtered.map((order: Order) => {
                 const statusConfig = orderStatusConfig[order.status];
                 return (
                   <TableRow key={order.id}>
-                    <TableCell className="font-medium">
-                      {order.order_number}
-                    </TableCell>
+                    <TableCell className="font-medium">{order.order_number}</TableCell>
                     <TableCell>{order.client_name}</TableCell>
                     <TableCell className="max-w-[200px] truncate">
                       {order.cargo_description || "-"}
@@ -254,12 +230,10 @@ export default function OrdersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem disabled>
-                            Szczegóły
-                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled>Szczegóły</DropdownMenuItem>
                           {canCancel(order.status) && (
                             <DropdownMenuItem
-                              onClick={() => handleCancelClick(order)}
+                              onClick={() => setCancelDialog({ open: true, id: order.id, label: order.order_number })}
                               className="text-destructive"
                             >
                               Anuluj
@@ -281,9 +255,7 @@ export default function OrdersPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Nowe zamówienie</DialogTitle>
-            <DialogDescription>
-              Wypełnij dane nowego zamówienia transportowego.
-            </DialogDescription>
+            <DialogDescription>Wypełnij dane nowego zamówienia transportowego.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
@@ -400,9 +372,7 @@ export default function OrdersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              Anuluj
-            </Button>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Anuluj</Button>
             <Button
               onClick={() => createMutation.mutate()}
               disabled={
@@ -413,45 +383,24 @@ export default function OrdersPage() {
                 !createForm.destination_warehouse_id
               }
             >
-              {createMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
+              {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Utwórz zamówienie
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Cancel Confirmation Dialog */}
-      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Anulować zamówienie?</DialogTitle>
-            <DialogDescription>
-              Czy na pewno chcesz anulować zamówienie{" "}
-              <strong>{orderToCancel?.order_number}</strong>? Tej operacji nie można cofnąć.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setCancelDialogOpen(false)}
-            >
-              Nie, zachowaj
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmCancel}
-              disabled={cancelMutation.isPending}
-            >
-              {cancelMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Tak, anuluj
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Cancel Dialog */}
+      <ConfirmDialog
+        open={cancelDialog.open}
+        onOpenChange={(open) => setCancelDialog(d => ({ ...d, open }))}
+        title="Anulować zamówienie?"
+        description={<>Czy na pewno chcesz anulować zamówienie <strong>{cancelDialog.label}</strong>? Tej operacji nie można cofnąć.</>}
+        confirmLabel="Tak, anuluj"
+        cancelLabel="Nie, zachowaj"
+        isPending={cancelMutation.isPending}
+        onConfirm={() => cancelMutation.mutate(cancelDialog.id)}
+      />
     </div>
   );
 }

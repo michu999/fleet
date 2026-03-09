@@ -8,37 +8,27 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { warehouseApi } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useTableFilters } from "@/hooks/useTableFilters";
+import { TableToolbar } from "@/components/ui/table-toolbar";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, Loader2, Warehouse, Search } from "lucide-react";
+import { Plus, MoreHorizontal, Loader2, Warehouse } from "lucide-react";
 import { UserRole } from "@/types";
 import type { Warehouse as WarehouseType } from "@/types";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 enum WarehouseTypeEnum {
   WAREHOUSE = "warehouse",
@@ -52,7 +42,16 @@ const warehouseTypeConfig: Record<WarehouseTypeEnum, { label: string; variant: "
   [WarehouseTypeEnum.PICKUP_POINT]: { label: "Punkt odbioru", variant: "outline" },
 };
 
-const emptyForm = {
+interface FormState {
+  name: string;
+  address: string;
+  latitude: string;
+  longitude: string;
+  warehouse_type: WarehouseTypeEnum;
+  is_active: boolean;
+}
+
+const emptyForm: FormState = {
   name: "",
   address: "",
   latitude: "",
@@ -61,31 +60,33 @@ const emptyForm = {
   is_active: true,
 };
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function WarehousesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const [search, setSearch] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<WarehouseType | null>(null);
-  const [createForm, setCreateForm] = useState(emptyForm);
-  const [editForm, setEditForm] = useState(emptyForm);
+  const [createForm, setCreateForm] = useState<FormState>(emptyForm);
+  const [editForm, setEditForm] = useState<FormState>(emptyForm);
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "", label: "" });
 
-  // Sprawdź uprawnienia
   const canManage = user?.role === UserRole.SUPER_ADMIN
     || user?.role === UserRole.ADMIN
     || user?.role === UserRole.DISPATCHER;
 
-  // Fetch warehouses
   const { data, isLoading, error } = useQuery({
     queryKey: ["warehouses"],
     queryFn: () => warehouseApi.list({ per_page: 100 }),
   });
 
-  // Create mutation
+  const warehouses: WarehouseType[] = data?.data?.items || [];
+  const { search, setSearch, showInactive, setShowInactive, filtered } = useTableFilters(warehouses, {
+    searchFields: ["name", "address"],
+  });
+
   const createMutation = useMutation({
     mutationFn: () =>
       warehouseApi.create({
@@ -96,20 +97,17 @@ export default function WarehousesPage() {
         warehouse_type: createForm.warehouse_type,
         is_active: createForm.is_active,
       }),
-
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["warehouses"] });
       toast.success("Lokalizacja została dodana");
       setCreateDialogOpen(false);
       setCreateForm(emptyForm);
     },
-
     onError: (error: { message: string }) => {
       toast.error(error.message || "Błąd podczas dodawania lokalizacji");
     },
   });
 
-  // Update mutation
   const updateMutation = useMutation({
     mutationFn: () =>
       warehouseApi.update(editingWarehouse!.id, {
@@ -120,7 +118,6 @@ export default function WarehousesPage() {
         warehouse_type: editForm.warehouse_type,
         is_active: editForm.is_active,
       }),
-
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["warehouses"] });
       toast.success("Lokalizacja została zaktualizowana");
@@ -132,25 +129,17 @@ export default function WarehousesPage() {
     },
   });
 
-  // Deactivate mutation
-  const deactivateMutation = useMutation({
-    mutationFn: (id: string) =>
-      warehouseApi.update(id, { is_active: false }),
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => warehouseApi.delete(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["warehouses"] });
-      toast.success("Lokalizacja została dezaktywowana");
+      toast.success("Lokalizacja została usunięta");
+      setDeleteDialog({ open: false, id: "", label: "" });
     },
     onError: (error: { message: string }) => {
-      toast.error(error.message || "Błąd podczas dezaktywacji");
+      toast.error(error.message || "Błąd podczas usuwania lokalizacji");
     },
   });
-
-  const warehouses: WarehouseType[] = data?.data?.items || [];
-
-  const filteredWarehouses = warehouses.filter((w) =>
-    w.name.toLowerCase().includes(search.toLowerCase()) ||
-    w.address.toLowerCase().includes(search.toLowerCase())
-  );
 
   const handleEditClick = (warehouse: WarehouseType) => {
     setEditingWarehouse(warehouse);
@@ -178,16 +167,13 @@ export default function WarehousesPage() {
   if (error) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="text-center text-destructive">
-          Błąd podczas ładowania lokalizacji
-        </div>
+        <div className="text-center text-destructive">Błąd podczas ładowania lokalizacji</div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold">Lokalizacje</h1>
         <Button onClick={() => setCreateDialogOpen(true)}>
@@ -196,22 +182,20 @@ export default function WarehousesPage() {
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-2 max-w-sm">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Szukaj po nazwie lub adresie..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      <TableToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Szukaj po nazwie lub adresie..."
+        showInactive={showInactive}
+        onShowInactiveChange={setShowInactive}
+        inactiveLabel="Nieaktywne"
+      />
 
-      {/* Table */}
       {isLoading ? (
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
-      ) : filteredWarehouses.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center text-center">
           <Warehouse className="mb-4 h-12 w-12 text-muted-foreground" />
           <h3 className="text-lg font-semibold">Brak lokalizacji</h3>
@@ -233,7 +217,7 @@ export default function WarehousesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredWarehouses.map((warehouse) => {
+              {filtered.map((warehouse) => {
                 const typeConfig = warehouseTypeConfig[warehouse.warehouse_type as WarehouseTypeEnum];
                 return (
                   <TableRow key={warehouse.id} className={!warehouse.is_active ? "opacity-50" : ""}>
@@ -267,12 +251,18 @@ export default function WarehousesPage() {
                           </DropdownMenuItem>
                           {warehouse.is_active && (
                             <DropdownMenuItem
-                              onClick={() => deactivateMutation.mutate(warehouse.id)}
+                              onClick={() => warehouseApi.update(warehouse.id, { is_active: false }).then(() => queryClient.invalidateQueries({ queryKey: ["warehouses"] }))}
                               className="text-destructive"
                             >
                               Dezaktywuj
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem
+                            onClick={() => setDeleteDialog({ open: true, id: warehouse.id, label: warehouse.name })}
+                            className="text-destructive"
+                          >
+                            Usuń
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -309,20 +299,22 @@ export default function WarehousesPage() {
         isPending={updateMutation.isPending}
         submitLabel="Zapisz zmiany"
       />
+
+      {/* Delete Dialog */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(d => ({ ...d, open }))}
+        title="Usunąć lokalizację?"
+        description={<>Czy na pewno chcesz usunąć lokalizację <strong>{deleteDialog.label}</strong>? Tej operacji nie można cofnąć.</>}
+        confirmLabel="Usuń"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate(deleteDialog.id)}
+      />
     </div>
   );
 }
 
-// ─── Reusable Form Dialog ─────────────────────────────────────────────────────
-
-interface FormState {
-  name: string;
-  address: string;
-  latitude: string;
-  longitude: string;
-  warehouse_type: WarehouseTypeEnum;
-  is_active: boolean;
-}
+// ─── Form Dialog ──────────────────────────────────────────────────────────────
 
 interface WarehouseFormDialogProps {
   open: boolean;
@@ -410,14 +402,23 @@ function WarehouseFormDialog({
               />
             </div>
           </div>
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <select
+              value={form.is_active ? "true" : "false"}
+              onChange={(e) => setForm(p => ({ ...p, is_active: e.target.value === "true" }))}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="true">Aktywna</option>
+              <option value="false">Nieaktywna</option>
+            </select>
+          </div>
           <p className="text-xs text-muted-foreground">
             Współrzędne możesz znaleźć klikając prawym przyciskiem myszy na Google Maps.
           </p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Anuluj
-          </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Anuluj</Button>
           <Button onClick={onSubmit} disabled={isPending || !isValid}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {submitLabel}
