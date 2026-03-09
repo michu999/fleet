@@ -4,6 +4,7 @@
 
 import {useState} from "react";
 import {useQuery, useMutation, useQueryClient} from "@tanstack/react-query";
+import {useNavigate} from "react-router-dom";
 import {toast} from "sonner";
 import {ordersApi, warehouseApi} from "@/api";
 import {useTableFilters} from "@/hooks/useTableFilters";
@@ -64,6 +65,23 @@ const emptyForm = {
     notes: "",
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const decimalOnChange = (val: string, setter: (v: string) => void) => {
+    if (val === "" || /^\d*\.?\d*$/.test(val)) setter(val);
+};
+
+// Polish phone: 9 digits, optionally with +48 prefix and spaces/dashes
+const PHONE_REGEX = /^(\+48[\s-]?)?\d{3}[\s-]?\d{3}[\s-]?\d{3}$/;
+// Email regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const validateContact = (contact: string): boolean => {
+    if (!contact) return true; // optional field
+    const trimmed = contact.trim();
+    return PHONE_REGEX.test(trimmed) || EMAIL_REGEX.test(trimmed);
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
@@ -72,6 +90,7 @@ export default function OrdersPage() {
     const [createForm, setCreateForm] = useState(emptyForm);
     const [cancelDialog, setCancelDialog] = useState({open: false, id: "", label: ""});
     const queryClient = useQueryClient();
+    const navigate = useNavigate();
 
     const {data, isLoading, error} = useQuery({
         queryKey: ["orders", statusFilter],
@@ -93,6 +112,28 @@ export default function OrdersPage() {
     const {search, setSearch, filtered} = useTableFilters(orders, {
         searchFields: ["order_number", "client_name"],
     });
+
+    const validateForm = (): boolean => {
+        if (createForm.client_contact && !validateContact(createForm.client_contact)) {
+            toast.error("Kontakt musi być poprawnym numerem telefonu (np. 123 456 789) lub adresem email");
+            return false;
+        }
+        if (createForm.weight_kg !== "") {
+            const w = parseFloat(createForm.weight_kg);
+            if (isNaN(w) || w <= 0 || w > 99999) {
+                toast.error("Waga musi być liczbą między 0 a 99 999 kg");
+                return false;
+            }
+        }
+        if (createForm.volume_m3 !== "") {
+            const v = parseFloat(createForm.volume_m3);
+            if (isNaN(v) || v <= 0 || v > 999) {
+                toast.error("Objętość musi być liczbą między 0 a 999 m³");
+                return false;
+            }
+        }
+        return true;
+    };
 
     const createMutation = useMutation({
         mutationFn: () =>
@@ -206,7 +247,11 @@ export default function OrdersPage() {
                             {filtered.map((order: Order) => {
                                 const statusConfig = orderStatusConfig[order.status];
                                 return (
-                                    <TableRow key={order.id}>
+                                    <TableRow
+                                        key={order.id}
+                                        className="cursor-pointer hover:bg-muted/50"
+                                        onClick={() => navigate(`/orders/${order.id}`)}
+                                    >
                                         <TableCell className="font-medium">{order.order_number}</TableCell>
                                         <TableCell>{order.client_name}</TableCell>
                                         <TableCell className="max-w-[200px] truncate">
@@ -225,7 +270,7 @@ export default function OrdersPage() {
                                         <TableCell>
                                             {new Date(order.created_at).toLocaleDateString("pl-PL")}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell onClick={(e) => e.stopPropagation()}>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" size="icon">
@@ -233,7 +278,9 @@ export default function OrdersPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem disabled>Szczegóły</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => navigate(`/orders/${order.id}`)}>
+                                                        Szczegóły
+                                                    </DropdownMenuItem>
                                                     {canCancel(order.status) && (
                                                         <DropdownMenuItem
                                                             onClick={() => setCancelDialog({
@@ -321,10 +368,20 @@ export default function OrdersPage() {
                                 <Label htmlFor="client_contact">Kontakt do klienta</Label>
                                 <Input
                                     id="client_contact"
-                                    placeholder="tel. lub email"
+                                    placeholder="tel. 123 456 789 lub email"
                                     value={createForm.client_contact}
                                     onChange={(e) => setCreateForm(p => ({...p, client_contact: e.target.value}))}
+                                    className={
+                                        createForm.client_contact && !validateContact(createForm.client_contact)
+                                            ? "border-destructive"
+                                            : ""
+                                    }
                                 />
+                                {createForm.client_contact && !validateContact(createForm.client_contact) && (
+                                    <p className="text-xs text-destructive">
+                                        Podaj poprawny numer telefonu lub adres email
+                                    </p>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="deadline_at">Termin dostawy</Label>
@@ -341,20 +398,30 @@ export default function OrdersPage() {
                                 <Label htmlFor="weight_kg">Waga (kg)</Label>
                                 <Input
                                     id="weight_kg"
-                                    type="number"
+                                    type="text"
+                                    inputMode="decimal"
                                     placeholder="np. 1500"
                                     value={createForm.weight_kg}
-                                    onChange={(e) => setCreateForm(p => ({...p, weight_kg: e.target.value}))}
+                                    onChange={(e) =>
+                                        decimalOnChange(e.target.value, (v) =>
+                                            setCreateForm(p => ({...p, weight_kg: v}))
+                                        )
+                                    }
                                 />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="volume_m3">Objętość (m³)</Label>
                                 <Input
                                     id="volume_m3"
-                                    type="number"
+                                    type="text"
+                                    inputMode="decimal"
                                     placeholder="np. 12.5"
                                     value={createForm.volume_m3}
-                                    onChange={(e) => setCreateForm(p => ({...p, volume_m3: e.target.value}))}
+                                    onChange={(e) =>
+                                        decimalOnChange(e.target.value, (v) =>
+                                            setCreateForm(p => ({...p, volume_m3: v}))
+                                        )
+                                    }
                                 />
                             </div>
                         </div>
@@ -384,7 +451,10 @@ export default function OrdersPage() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Anuluj</Button>
                         <Button
-                            onClick={() => createMutation.mutate()}
+                            onClick={() => {
+                                if (!validateForm()) return;
+                                createMutation.mutate();
+                            }}
                             disabled={
                                 createMutation.isPending ||
                                 !createForm.order_number ||
