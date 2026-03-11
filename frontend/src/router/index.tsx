@@ -12,6 +12,7 @@ import {
 } from "react-router-dom";
 import {useAuth} from "@/hooks/useAuth";
 import {Loader2} from "lucide-react";
+import OpsPanelPage from "@/pages/OpsPanelPage";
 
 // Pages (lazy loaded later)
 import LoginPage from "@/pages/LoginPage";
@@ -103,6 +104,8 @@ export function AppRouter() {
                     <Route path="/orders/:id" element={<OrderDetailPage/>}/> {/* ← dodaj */}
                     <Route path="/warehouses" element={<ProtectedRoute><WarehousesPage/></ProtectedRoute>}/>
                     <Route path="/warehouses" element={<ProtectedRoute><WarehousesPage/></ProtectedRoute>}/>
+
+                    <Route path="/ops" element={<OpsPanelPage />} />
                 </Route>
 
                 {/* Redirects */}

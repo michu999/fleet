@@ -14,6 +14,7 @@ import {
     ChevronLeft,
     ChevronRight,
     LogOut,
+    ShieldCheck
 } from "lucide-react";
 import {Button} from "@/components/ui/button";
 import {Avatar, AvatarFallback, AvatarImage} from "@/components/ui/avatar";
@@ -54,6 +55,13 @@ const getNavItems = (role: UserRole): NavItem[] => {
             title: "Lokalizacje",
             href: "/warehouses",
             icon: Warehouse,
+        });
+    }
+    if (role === UserRole.SUPER_ADMIN) {
+        items.push({
+            title: "Ops Panel",
+            href: "/ops",
+            icon: ShieldCheck,
         });
     }
 
@@ -116,7 +124,9 @@ export function Sidebar() {
                     const isActive = location.pathname === item.href;
                     const Icon = item.icon;
 
+
                     return (
+
                         <Link
                             key={item.href}
                             to={item.href}
