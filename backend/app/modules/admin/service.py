@@ -9,7 +9,7 @@ import logging
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import TenantPlan, TripStatus
@@ -98,6 +98,12 @@ class AdminTenantService:
                 setattr(tenant, field, value.value if isinstance(value, TenantPlan) else value)
             else:
                 setattr(tenant, field, value)
+        if update_data.get("is_active") is False:
+            await self.db.execute(
+                update(User)
+                .where(User.tenant_id == tenant.id)
+                .values(is_active=False)
+            )
         
         await self.db.commit()
         await self.db.refresh(tenant)

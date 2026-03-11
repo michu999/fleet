@@ -69,6 +69,8 @@ const emptyUserForm: UserCreatePayload = {
     role: UserRole.ADMIN,
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function slugify(name: string): string {
@@ -332,7 +334,13 @@ function TenantDetail({
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCreateUserOpen(false)}>Anuluj</Button>
                         <Button
-                            onClick={() => createUserMutation.mutate()}
+                            onClick={() => {
+                                if (!EMAIL_REGEX.test(userForm.email)) {
+                                    toast.error("Podaj poprawny adres email");
+                                    return;
+                                }
+                                createUserMutation.mutate();
+                            }}
                             disabled={createUserMutation.isPending || !userForm.email || !userForm.name}
                         >
                             {createUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}

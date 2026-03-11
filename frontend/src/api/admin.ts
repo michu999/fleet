@@ -37,6 +37,7 @@ export interface UserUpdatePayload {
 
 export interface TenantStats {
   tenant_id: string;
+  tenant_name: string;
   users_count: number;
   vehicles_count: number;
   orders_count: number;
