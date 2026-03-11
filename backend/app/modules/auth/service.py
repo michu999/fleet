@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
 from app.core.config import get_settings
 from app.core.config import settings
@@ -248,28 +248,21 @@ async def get_or_create_oauth_user(
     google_data: dict,
 ) -> tuple[User, bool]:
     """
-    Find existing user by email or create new one with tenant.
+    Find existing user by email and authenticate.
 
-    For new users:
-    - Creates a new Tenant based on email domain
-    - Creates user as ADMIN of that tenant
-
-    For existing users:
-    - Updates profile data from Google (name, picture, google_id)
-
-    Args:
-        db: Database session.
-        google_data: Dict from verify_google_token with email, name, picture, google_id.
+    Only allows users pre-created by Super Admin via Ops Panel.
+    Self-registration is disabled.
 
     Returns:
         Tuple of (User, is_new_user: bool)
+
+    Raises:
+        HTTPException 403: If email is not registered in the system.
     """
+    # Existing user — update profile and allow in
 
-    # Try to find existing user
     existing = await get_user_by_email_global(db, google_data["email"])
-
     if existing:
-        # Update profile data from Google
         existing.name = google_data["name"]
         existing.picture = google_data["picture"]
         existing.google_id = google_data["google_id"]
@@ -277,6 +270,7 @@ async def get_or_create_oauth_user(
         await db.refresh(existing)
         return existing, False
 
+    # Super admin — create without tenant
     if google_data["email"] in settings.get_super_admin_emails():
         user = User(
             email=google_data["email"],
@@ -290,36 +284,9 @@ async def get_or_create_oauth_user(
         await db.refresh(user)
         return user, True
 
-    # New user — create tenant first, then user
-    domain = google_data["email"].split("@")[1]
-    slug = domain.replace(".", "-")
-
-    # Check if tenant with this slug exists (avoid duplicates)
-    existing_tenant = await db.execute(
-        select(Tenant).where(Tenant.slug == slug)
+    # Unknown email — deny access
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Brak dostępu. Skontaktuj się z administratorem. (TUTAJ EMAIL ADMINA)",
     )
-    tenant = existing_tenant.scalar_one_or_none()
-
-    if not tenant:
-        tenant = Tenant(
-            name=domain,
-            slug=slug,
-            domain=domain,
-        )
-        db.add(tenant)
-        await db.flush()  # Get tenant.id without full commit
-
-    user = User(
-        tenant_id=tenant.id,
-        email=google_data["email"],
-        name=google_data["name"],
-        picture=google_data["picture"],
-        google_id=google_data["google_id"],
-        role=UserRole.ADMIN,  # First user in tenant is admin
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    return user, True
 
