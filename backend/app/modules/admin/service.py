@@ -13,6 +13,8 @@ from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import TenantPlan, TripStatus
+from app.core.security import create_access_token, jwt, ALGORITHM
+from app.core.config import settings
 from app.modules.auth.models import Tenant, User
 from app.modules.admin.schemas import (
     TenantCreateAdmin,
@@ -40,10 +42,10 @@ class AdminTenantService:
     ) -> list[Tenant]:
         """List all tenants with optional filtering."""
         query = select(Tenant).order_by(Tenant.created_at.desc())
-        
+
         if active_only:
             query = query.where(Tenant.is_active == True)
-        
+
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -58,11 +60,10 @@ class AdminTenantService:
     async def create_tenant(self, data: TenantCreateAdmin) -> Tenant:
         """
         Create a new tenant.
-        
+
         Raises:
             HTTPException 409: If tenant with same slug already exists.
         """
-        # Check slug uniqueness
         existing = await self.db.execute(
             select(Tenant).where(Tenant.slug == data.slug)
         )
@@ -89,22 +90,25 @@ class AdminTenantService:
         tenant: Tenant,
         data: TenantUpdateAdmin,
     ) -> Tenant:
-        """Update an existing tenant."""
+        """
+        Update an existing tenant.
+        If deactivated, also deactivates all users in the tenant.
+        """
         update_data = data.model_dump(exclude_unset=True)
-        
+
         for field, value in update_data.items():
             if field == "plan" and value is not None:
-                # Convert enum to string value
                 setattr(tenant, field, value.value if isinstance(value, TenantPlan) else value)
             else:
                 setattr(tenant, field, value)
+
         if update_data.get("is_active") is False:
             await self.db.execute(
                 update(User)
                 .where(User.tenant_id == tenant.id)
                 .values(is_active=False)
             )
-        
+
         await self.db.commit()
         await self.db.refresh(tenant)
         return tenant
@@ -112,10 +116,9 @@ class AdminTenantService:
     async def get_tenant_stats(self, tenant_id: UUID) -> dict:
         """
         Get statistics for a tenant.
-        
+
         Returns counts of users, vehicles, orders, and active trips.
         """
-        # Import here to avoid circular imports
         from app.modules.fleet.models import Vehicle, Trip
         from app.modules.orders.models import Order
 
@@ -123,29 +126,18 @@ class AdminTenantService:
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
 
-        # Count active users
         users_count = await self.db.scalar(
             select(func.count(User.id)).where(
                 User.tenant_id == tenant_id,
                 User.is_active == True,
             )
         )
-
-        # Count vehicles
         vehicles_count = await self.db.scalar(
-            select(func.count(Vehicle.id)).where(
-                Vehicle.tenant_id == tenant_id,
-            )
+            select(func.count(Vehicle.id)).where(Vehicle.tenant_id == tenant_id)
         )
-
-        # Count orders
         orders_count = await self.db.scalar(
-            select(func.count(Order.id)).where(
-                Order.tenant_id == tenant_id,
-            )
+            select(func.count(Order.id)).where(Order.tenant_id == tenant_id)
         )
-
-        # Count active trips
         active_trips_count = await self.db.scalar(
             select(func.count(Trip.id)).where(
                 Trip.tenant_id == tenant_id,
@@ -182,7 +174,7 @@ class AdminUserService:
         return list(result.scalars().all())
 
     async def get_user(self, user_id: UUID) -> User | None:
-        """Get a user by ID."""
+        """Get a user by ID (global, no tenant filter)."""
         result = await self.db.execute(
             select(User).where(User.id == user_id)
         )
@@ -195,19 +187,17 @@ class AdminUserService:
     ) -> User:
         """
         Create a new user for a tenant.
-        
+
         Raises:
             HTTPException 404: If tenant not found or inactive.
             HTTPException 409: If user limit reached or email exists.
         """
-        # Check tenant exists and is active
         tenant = await self.db.get(Tenant, tenant_id)
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
         if not tenant.is_active:
             raise HTTPException(status_code=400, detail="Tenant is inactive")
 
-        # Check user limit
         current_count = await self.db.scalar(
             select(func.count(User.id)).where(
                 User.tenant_id == tenant_id,
@@ -220,7 +210,6 @@ class AdminUserService:
                 detail=f"Tenant has reached maximum users limit ({tenant.max_users})",
             )
 
-        # Check email uniqueness (global check)
         existing = await self.db.execute(
             select(User).where(User.email == data.email)
         )
@@ -249,7 +238,7 @@ class AdminUserService:
     ) -> User:
         """
         Update a user.
-        
+
         Raises:
             HTTPException 404: If user not found.
             HTTPException 400: If trying to modify own role.
@@ -258,7 +247,6 @@ class AdminUserService:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Prevent self role change
         if "role" in data and user_id == current_user_id:
             raise HTTPException(
                 status_code=400,
@@ -271,3 +259,70 @@ class AdminUserService:
         await self.db.commit()
         await self.db.refresh(user)
         return user
+
+    async def impersonate_user(
+        self,
+        target_user_id: UUID,
+        super_admin: User,
+    ) -> tuple[str, User]:
+        """
+        Generate impersonation token for a tenant user.
+
+        Raises:
+            HTTPException 404: If user not found.
+            HTTPException 400: If user is inactive or is a super admin.
+
+        Returns:
+            Tuple of (impersonation_token, target_user)
+        """
+        target_user = await self.get_user(target_user_id)
+
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not target_user.is_active:
+            raise HTTPException(status_code=400, detail="Cannot impersonate inactive user")
+        if target_user.role.value == "super_admin":
+            raise HTTPException(status_code=400, detail="Cannot impersonate another super admin")
+
+        token = create_access_token({
+            "sub": str(target_user.id),
+            "tenant_id": str(target_user.tenant_id),
+            "role": target_user.role.value,
+            "impersonated_by": str(super_admin.id),
+            "impersonated_by_email": super_admin.email,
+        })
+
+        return token, target_user
+
+    async def stop_impersonation(self, original_token: str) -> User:
+        """
+        Decode original super admin token and return super admin user.
+
+        Raises:
+            HTTPException 401: If token is invalid.
+            HTTPException 404: If super admin user not found.
+
+        Returns:
+            Super admin User object.
+        """
+        try:
+            payload = jwt.decode(
+                original_token,
+                settings.SECRET_KEY,
+                algorithms=[ALGORITHM],
+            )
+            super_admin_id = UUID(payload["sub"])
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="Original session expired")
+        except jwt.InvalidTokenError:
+            raise HTTPException(status_code=401, detail="Invalid original session token")
+
+        result = await self.db.execute(
+            select(User).where(User.id == super_admin_id)
+        )
+        super_admin = result.scalar_one_or_none()
+
+        if not super_admin:
+            raise HTTPException(status_code=404, detail="Super admin user not found")
+
+        return super_admin
