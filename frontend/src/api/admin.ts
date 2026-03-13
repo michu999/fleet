@@ -37,11 +37,15 @@ export interface UserUpdatePayload {
 
 export interface TenantStats {
   tenant_id: string;
-  tenant_name: string;
   users_count: number;
   vehicles_count: number;
   orders_count: number;
   active_trips_count: number;
+}
+
+export interface ImpersonateResponse {
+  user: User;
+  is_new_user: boolean;
 }
 
 // ─── API ───────────────────────────────────────────────────────────────────
@@ -72,4 +76,11 @@ export const adminApi = {
 
   updateUser: (userId: string, data: UserUpdatePayload) =>
     client.patch<User>(`/admin/users/${userId}`, data),
+
+  // Impersonation
+  impersonate: (userId: string) =>
+    client.post<ImpersonateResponse>(`/admin/impersonate/${userId}`),
+
+  stopImpersonation: () =>
+    client.post<ImpersonateResponse>("/admin/impersonate/stop"),
 };

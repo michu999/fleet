@@ -68,6 +68,7 @@ class UserRead(UserBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    impersonated_by: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

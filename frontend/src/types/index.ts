@@ -70,6 +70,7 @@ export interface User {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  impersonated_by?: string | null;
 }
 
 export interface AuthResponse {
