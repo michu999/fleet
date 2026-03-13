@@ -6,12 +6,13 @@ Multi-tenant architecture with Google OAuth 2.0 support.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 from uuid import UUID
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ENUM as PG_ENUM
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, declared_attr
+
 
 from app.core.database import Base
 from app.core.enums import UserRole, TenantPlan
@@ -117,6 +118,7 @@ class User(Base):
     """
 
     __tablename__ = "users"
+    __allow_unmapped__ = True
     __table_args__ = (
         # Composite index for common query: find users by tenant and role
         Index("ix_users_tenant_role", "tenant_id", "role"),
@@ -196,6 +198,7 @@ class User(Base):
         "WorkTime",
         back_populates="driver",
     )
+    impersonated_by: ClassVar[str | None] = None
 
 
 class DriverProfile(Base):

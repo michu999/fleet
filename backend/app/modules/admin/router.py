@@ -233,7 +233,6 @@ async def update_user(
 async def stop_impersonation(
         request: Request,
         response: Response,
-        current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
 ):
     """
@@ -262,7 +261,7 @@ async def stop_impersonation(
         payload = jwt.decode(
             original_token,
             settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM])
+            algorithms=[ALGORITHM])
 
         super_admin_id = UUID(payload["sub"])
     except Exception:

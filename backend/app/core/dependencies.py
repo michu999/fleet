@@ -76,6 +76,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User account is deactivated",
         )
+    user.impersonated_by = payload.get("impersonated_by")
 
     # Set RLS context for tenant isolation (parametrized to prevent SQL injection)
     if user.tenant_id and user.role != UserRole.SUPER_ADMIN:

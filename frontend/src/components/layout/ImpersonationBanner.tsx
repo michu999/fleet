@@ -16,11 +16,11 @@ export function ImpersonationBanner() {
         mutationFn: () => adminApi.stopImpersonation(),
         onSuccess: async (res) => {
             const restoredUser = res.data?.user ?? res.data;
-            queryClient.setQueryData(["auth", "me"], restoredUser); // ← zamiast setUser
+            queryClient.setQueryData(["auth", "me"], restoredUser);
             await queryClient.invalidateQueries();
             toast.success("Powrócono do konta Super Admin");
         },
-        onError: () => {
+        onError: (e) => {
             toast.error("Błąd podczas przywracania sesji — zaloguj się ponownie");
         },
     });
@@ -40,7 +40,9 @@ export function ImpersonationBanner() {
                 size="sm"
                 variant="outline"
                 className="border-yellow-800 bg-transparent text-yellow-950 hover:bg-yellow-600"
-                onClick={() => stopMutation.mutate()}
+                onClick={() =>
+                    stopMutation.mutate()
+                }
                 disabled={stopMutation.isPending}
             >
                 <LogOut className="mr-2 h-3 w-3"/>
