@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, String, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, String, func, Time
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -88,6 +88,18 @@ class Warehouse(Base):
         back_populates="destination_warehouse",
         foreign_keys="[Order.destination_warehouse_id]",
     )
+
+class WarehouseOperatingHours(Base):
+    __tablename__ = "warehouses_operating_hours"
+    __table_args__ = (
+
+    )
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    warehouse_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+    day_of_the_week: Mapped[int]
+    is_open: Mapped[bool]
+    open_time: Mapped[datetime | None]
+    close_time: Mapped[datetime | None]
 
 
 class Order(Base):
