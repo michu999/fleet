@@ -1,15 +1,18 @@
 """
-Orders module models: Warehouse, Order.
+Orders module models: Warehouse, WarehouseOperatingHours, Order.
 Logistics management with origin/destination warehouses.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, String, func, Time
+from sqlalchemy import (
+    Boolean, CheckConstraint, DateTime, Float, ForeignKey,
+    Index, Integer, String, Time, UniqueConstraint, func,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -78,6 +81,12 @@ class Warehouse(Base):
 
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="warehouses")
+    operating_hours: Mapped[list["WarehouseOperatingHours"]] = relationship(
+        "WarehouseOperatingHours",
+        back_populates="warehouse",
+        cascade="all, delete-orphan",
+        order_by="WarehouseOperatingHours.day_of_the_week",
+    )
     orders_as_origin: Mapped[list["Order"]] = relationship(
         "Order",
         back_populates="origin_warehouse",
@@ -89,17 +98,55 @@ class Warehouse(Base):
         foreign_keys="[Order.destination_warehouse_id]",
     )
 
+
 class WarehouseOperatingHours(Base):
+    """
+    Operating hours for a warehouse, one record per day of the week.
+    day_of_the_week: 0=Monday, 1=Tuesday, ..., 6=Sunday
+    """
+
     __tablename__ = "warehouses_operating_hours"
     __table_args__ = (
-
+        # One record per day per warehouse
+        UniqueConstraint("warehouse_id", "day_of_the_week", name="uq_warehouse_day"),
+        # day_of_the_week must be 0-6
+        CheckConstraint(
+            "day_of_the_week >= 0 AND day_of_the_week <= 6",
+            name="ck_warehouse_day_range",
+        ),
+        # If is_open=True, both times must be set
+        CheckConstraint(
+            "NOT is_open OR (open_time IS NOT NULL AND close_time IS NOT NULL)",
+            name="ck_warehouse_hours_when_open",
+        ),
+        # open_time must be before close_time
+        CheckConstraint(
+            "NOT is_open OR open_time < close_time",
+            name="ck_warehouse_hours_order",
+        ),
+        Index("ix_warehouses_operating_hours_warehouse", "warehouse_id"),
     )
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
-    warehouse_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
-    day_of_the_week: Mapped[int]
-    is_open: Mapped[bool]
-    open_time: Mapped[datetime | None]
-    close_time: Mapped[datetime | None]
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
+    )
+    warehouse_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("warehouses.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    day_of_the_week: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_open: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    open_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    close_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+
+    # Relationships
+    warehouse: Mapped["Warehouse"] = relationship(
+        "Warehouse",
+        back_populates="operating_hours",
+    )
 
 
 class Order(Base):
